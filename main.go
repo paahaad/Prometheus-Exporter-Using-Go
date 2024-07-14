@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -53,25 +54,25 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("%s Request for %s\n", r.Method, r.RequestURI)
 
-		rr := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		rr := &responseRecoder{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(rr, r)
 
-		requestCounter.With(prometheus.Labels{"code": rr.statusCode, "method": r.Methods, "path": r.RequestURI}).inc()
+		requestCounter.With(prometheus.Labels{"code": strconv.Itoa(rr.statusCode), "method": r.Method, "path": r.RequestURI}).Inc()
 
 	})
 }
 
-type ResponseRecoder struct{
+type responseRecoder struct {
 	http.ResponseWriter
 	statusCode int
 }
 
-func (rr *ResponseRecoder) WriteHeader (code int){
+func (rr *responseRecoder) WriteHeader(code int) {
 	rr.statusCode = code
 	rr.ResponseWriter.WriteHeader(code)
 }
 
-func init(){
+func init() {
 	prometheus.MustRegister(requestCounter)
 }
 
@@ -80,7 +81,7 @@ func main() {
 	r.Use(LoggingMiddleware)
 
 	r.HandleFunc("/sum", sumHandler).Methods("POST")
-	r.HandleFunc("/metrics", promhttp.Handler())
+	r.Handle("/metrics", promhttp.Handler())
 
 	fmt.Println("Server is running at port 8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
