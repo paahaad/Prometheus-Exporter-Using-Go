@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,9 +31,19 @@ var (
 		},
 		[]string{"code", "method", "path"},
 	)
+
+	requestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_ms",
+			Help:    "Histogram of the duration of HTTP requests processed.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "path"},
+	)
 )
 
 func sumHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	w.Header().Set("content-type", "application/json")
 
 	var data SumRequest
@@ -46,6 +57,9 @@ func sumHandler(w http.ResponseWriter, r *http.Request) {
 	result := data.A + data.B
 	res := SumResponse{Result: result}
 	json.NewEncoder(w).Encode(res)
+
+	duration := time.Since(start).Milliseconds()
+	requestDuration.With(prometheus.Labels{"method": r.Method, "path": r.URL.Path}).Observe(float64(duration))
 
 }
 
@@ -73,7 +87,7 @@ func (rr *responseRecoder) WriteHeader(code int) {
 }
 
 func init() {
-	prometheus.MustRegister(requestCounter)
+	prometheus.MustRegister(requestCounter, requestDuration)
 }
 
 func main() {
